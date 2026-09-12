@@ -28,8 +28,20 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Ensure Android project structure
-        run: flutter create . --platforms=android --org com.montevpn --project-name monte_vpn
+      - name: Generate Android scaffold
+        run: |
+          mkdir -p /tmp/fresh
+          cd /tmp/fresh
+          flutter create scaffold_app --platforms=android --org com.montevpn
+          cd -
+          cp -r /tmp/fresh/scaffold_app/android/gradle android/
+          cp /tmp/fresh/scaffold_app/android/gradlew android/
+          cp /tmp/fresh/scaffold_app/android/gradlew.bat android/
+          cp /tmp/fresh/scaffold_app/android/build.gradle android/
+          cp /tmp/fresh/scaffold_app/android/settings.gradle android/
+          cp /tmp/fresh/scaffold_app/android/app/build.gradle android/app/
+          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle || true
+          sed -i 's/minSdk = .*/minSdk = 24/' android/app/build.gradle || true
 
       - name: Install dependencies
         run: flutter pub get
@@ -50,8 +62,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.0.0
-          name: "MonteVPN Release v1.0.0"
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "MonteVPN Release v1.0.${{ github.run_number }}"
           draft: false
           prerelease: false
           files: build/app/outputs/flutter-apk/MonteVPN.apk
