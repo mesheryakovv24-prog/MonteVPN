@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'config/app_config.dart';
 import 'services/vpn_service.dart';
@@ -270,7 +270,64 @@ class _HomeScreenState extends State<HomeScreen> {
               // Speed & ping stats
               StatusCard(vpnService: widget.vpnService),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+
+              // Anti-BPLA Toggle Card (Белые списки / Маскировка под ya.ru)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.cardBorder),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryNeon.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.shield_rounded,
+                        color: AppTheme.primaryNeon,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Обход белых списков (Анти-БПЛА)',
+                            style: TextStyle(
+                              color: AppTheme.textWhite,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Маскировка под ya.ru при глушилках',
+                            style: TextStyle(
+                              color: AppTheme.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: widget.vpnService.antiBpla,
+                      activeColor: AppTheme.primaryNeon,
+                      onChanged: (val) => widget.vpnService.toggleAntiBpla(val),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
 
               // Bypass Russian Services Card (Белые списки РФ / Split Tunneling)
               Container(

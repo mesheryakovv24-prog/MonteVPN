@@ -29,24 +29,41 @@ class MonteVpnService extends ChangeNotifier {
 
   ConnectionStatus _status = ConnectionStatus.disconnected;
   V2RayStatus _v2rayStatus = V2RayStatus();
+  bool _antiBpla = AppConfig.defaultAntiBpla;
   bool _bypassRu = AppConfig.defaultBypassRu;
-  String _currentServerName = 'MonteVPN Server';
+  String _currentServerName = 'MonteVPN Анти-БПЛА (ya.ru)';
   int _pingDelay = -1;
   String _serverConfig = '';
 
   ConnectionStatus get status => _status;
   V2RayStatus get v2rayStatus => _v2rayStatus;
+  bool get antiBpla => _antiBpla;
   bool get bypassRu => _bypassRu;
   String get currentServerName => _currentServerName;
   int get pingDelay => _pingDelay;
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    _antiBpla = prefs.getBool('anti_bpla') ?? AppConfig.defaultAntiBpla;
     _bypassRu = prefs.getBool('bypass_ru') ?? AppConfig.defaultBypassRu;
     _serverConfig = prefs.getString('server_config') ?? '';
+    _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
 
     await _v2ray.initializeV2Ray();
     notifyListeners();
+  }
+
+  Future<void> toggleAntiBpla(bool value) async {
+    _antiBpla = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('anti_bpla', value);
+    _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+    notifyListeners();
+
+    if (_status == ConnectionStatus.connected) {
+      await disconnect();
+      await connect();
+    }
   }
 
   Future<void> toggleBypassRu(bool value) async {
@@ -106,10 +123,7 @@ class MonteVpnService extends ChangeNotifier {
 
       String configToUse = _serverConfig;
       if (configToUse.isEmpty) {
-        configToUse = await _fetchSubscriptionConfig(AppConfig.defaultSubscriptionUrl);
-      }
-      if (configToUse.isEmpty) {
-        configToUse = AppConfig.defaultVlessKey;
+        configToUse = _antiBpla ? AppConfig.antiBplaVlessKey : AppConfig.defaultVlessKey;
       }
 
       List<String> bypassRules = [];
@@ -118,7 +132,9 @@ class MonteVpnService extends ChangeNotifier {
       }
 
       final v2rayURL = FlutterV2ray.parseFromURL(configToUse);
-      _currentServerName = v2rayURL.remark.isNotEmpty ? v2rayURL.remark : 'MonteVPN Reality';
+      _currentServerName = v2rayURL.remark.isNotEmpty 
+          ? v2rayURL.remark 
+          : (_antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Reality');
 
       await _v2ray.startV2Ray(
         remark: _currentServerName,
