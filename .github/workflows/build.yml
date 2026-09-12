@@ -28,29 +28,30 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Android scaffold
-        run: |
-          mkdir -p /tmp/fresh
-          cd /tmp/fresh
-          flutter create scaffold_app --platforms=android --org com.montevpn
-          cd -
-          cp -r /tmp/fresh/scaffold_app/android/gradle android/
-          cp /tmp/fresh/scaffold_app/android/gradlew android/
-          cp /tmp/fresh/scaffold_app/android/gradlew.bat android/
-          cp /tmp/fresh/scaffold_app/android/build.gradle android/
-          cp /tmp/fresh/scaffold_app/android/settings.gradle android/
-          cp /tmp/fresh/scaffold_app/android/app/build.gradle android/app/
-          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle || true
-          sed -i 's/minSdk = .*/minSdk = 24/' android/app/build.gradle || true
-
-      - name: Install dependencies
-        run: flutter pub get
-
       - name: Build Android APK
-        run: flutter build apk --release
+        run: |
+          set -e
+          mkdir -p /tmp/monte_vpn
+          cp -r . /tmp/monte_vpn/
+          cd /tmp/monte_vpn
 
-      - name: Rename APK
-        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/MonteVPN.apk
+          mkdir -p /tmp/backup
+          cp android/app/src/main/AndroidManifest.xml /tmp/backup/AndroidManifest.xml
+          cp -r android/app/src/main/kotlin /tmp/backup/kotlin
+
+          flutter create . --platforms=android --org com.montevpn
+
+          cp /tmp/backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp -r /tmp/backup/kotlin android/app/src/main/
+
+          find android -name "build.gradle*" -exec sed -i 's/minSdkVersion .*/minSdkVersion 24/' {} + || true
+          find android -name "build.gradle*" -exec sed -i 's/minSdk = .*/minSdk = 24/' {} + || true
+
+          flutter pub get
+          flutter build apk --release
+
+          mkdir -p $GITHUB_WORKSPACE/build/app/outputs/flutter-apk
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/build/app/outputs/flutter-apk/MonteVPN.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
