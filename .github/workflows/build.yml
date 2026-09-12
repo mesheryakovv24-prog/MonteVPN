@@ -55,7 +55,9 @@ jobs:
           find android -name "build.gradle*" -exec sed -i 's/targetSdk = .*/targetSdk = 33/' {} + || true
           find android -name "build.gradle*" -exec sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' {} + || true
           find android -name "build.gradle*" -exec sed -i 's/compileSdk = .*/compileSdk = 34/' {} + || true
-          echo "android.bundle.enableUncompressedNativeLibs=false" >> android/gradle.properties
+          echo "flutter.minSdkVersion=24" >> android/local.properties
+          echo "flutter.targetSdkVersion=33" >> android/local.properties
+          echo "flutter.compileSdkVersion=34" >> android/local.properties
 
           # 6. Fetch dependencies and build release APK
           flutter pub get
