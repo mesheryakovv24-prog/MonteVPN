@@ -265,6 +265,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              if (widget.vpnService.lastError != null) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    widget.vpnService.lastError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppTheme.dangerRed,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+
               const Spacer(flex: 1),
 
               // Speed & ping stats

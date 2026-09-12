@@ -48,9 +48,14 @@ jobs:
           cp /tmp/backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           cp -r /tmp/backup/kotlin android/app/src/main/
 
-          # 5. Set minSdk 24 for V2Ray VPNService
+          # 5. Set minSdk 24, targetSdk 33, compileSdk 34 for V2Ray VPNService
           find android -name "build.gradle*" -exec sed -i 's/minSdkVersion .*/minSdkVersion 24/' {} + || true
           find android -name "build.gradle*" -exec sed -i 's/minSdk = .*/minSdk = 24/' {} + || true
+          find android -name "build.gradle*" -exec sed -i 's/targetSdkVersion .*/targetSdkVersion 33/' {} + || true
+          find android -name "build.gradle*" -exec sed -i 's/targetSdk = .*/targetSdk = 33/' {} + || true
+          find android -name "build.gradle*" -exec sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' {} + || true
+          find android -name "build.gradle*" -exec sed -i 's/compileSdk = .*/compileSdk = 34/' {} + || true
+          echo "android.bundle.enableUncompressedNativeLibs=false" >> android/gradle.properties
 
           # 6. Fetch dependencies and build release APK
           flutter pub get

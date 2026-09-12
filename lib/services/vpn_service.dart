@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 
@@ -34,6 +33,7 @@ class MonteVpnService extends ChangeNotifier {
   String _currentServerName = 'MonteVPN Анти-БПЛА (ya.ru)';
   int _pingDelay = -1;
   String _serverConfig = '';
+  String? _lastError;
 
   ConnectionStatus get status => _status;
   V2RayStatus get v2rayStatus => _v2rayStatus;
@@ -41,15 +41,20 @@ class MonteVpnService extends ChangeNotifier {
   bool get bypassRu => _bypassRu;
   String get currentServerName => _currentServerName;
   int get pingDelay => _pingDelay;
+  String? get lastError => _lastError;
 
   Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    _antiBpla = prefs.getBool('anti_bpla') ?? AppConfig.defaultAntiBpla;
-    _bypassRu = prefs.getBool('bypass_ru') ?? AppConfig.defaultBypassRu;
-    _serverConfig = prefs.getString('server_config') ?? '';
-    _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _antiBpla = prefs.getBool('anti_bpla') ?? AppConfig.defaultAntiBpla;
+      _bypassRu = prefs.getBool('bypass_ru') ?? AppConfig.defaultBypassRu;
+      _serverConfig = prefs.getString('server_config') ?? '';
+      _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
 
-    await _v2ray.initializeV2Ray();
+      await _v2ray.initializeV2Ray();
+    } catch (e) {
+      debugPrint('V2Ray initialization error: $e');
+    }
     notifyListeners();
   }
 
@@ -85,67 +90,83 @@ class MonteVpnService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> _fetchSubscriptionConfig(String url) async {
-    try {
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        String body = response.body.trim();
-        try {
-          final decoded = utf8.decode(base64.decode(body));
-          final lines = decoded.split(RegExp(r'[\r\n]+')).where((l) => l.isNotEmpty).toList();
-          if (lines.isNotEmpty) return lines.first;
-        } catch (_) {
-          final lines = body.split(RegExp(r'[\r\n]+')).where((l) => l.isNotEmpty).toList();
-          if (lines.isNotEmpty) return lines.first;
-        }
-        return body;
-      }
-    } catch (e) {
-      debugPrint('Subscription fetch error: $e');
-    }
-    return '';
-  }
-
   Future<void> connect() async {
     if (_status == ConnectionStatus.connected || _status == ConnectionStatus.connecting) {
       return;
     }
 
     _status = ConnectionStatus.connecting;
+    _lastError = null;
     notifyListeners();
 
     try {
-      if (!await _v2ray.requestPermission()) {
+      final hasPermission = await _v2ray.requestPermission();
+      if (!hasPermission) {
         _status = ConnectionStatus.disconnected;
+        _lastError = 'Разрешение на VPN не получено';
         notifyListeners();
         return;
       }
 
-      String configToUse = _serverConfig;
+      String configToUse = _serverConfig.trim();
       if (configToUse.isEmpty) {
         configToUse = _antiBpla ? AppConfig.antiBplaVlessKey : AppConfig.defaultVlessKey;
       }
 
-      List<String> bypassRules = [];
+      final v2rayURL = FlutterV2ray.parseFromURL(configToUse);
+      _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+
+      // Configure clean DNS servers
+      v2rayURL.dns = {
+        "servers": ["1.1.1.1", "8.8.8.8", "77.88.8.8"]
+      };
+
+      // Enable sniffing on inbound to intercept hostnames for smart routing
+      v2rayURL.inbound["sniffing"] = {
+        "enabled": true,
+        "destOverride": ["http", "tls"]
+      };
+
+      // Configure Xray routing rules
       if (_bypassRu) {
-        bypassRules = AppConfig.defaultDirectDomains;
+        v2rayURL.routing["domainStrategy"] = "IPIfNonMatch";
+        v2rayURL.routing["rules"] = [
+          {
+            "type": "field",
+            "outboundTag": "direct",
+            "domain": AppConfig.defaultDirectDomains,
+          },
+          {
+            "type": "field",
+            "outboundTag": "proxy",
+            "network": "tcp,udp"
+          }
+        ];
+      } else {
+        v2rayURL.routing["rules"] = [
+          {
+            "type": "field",
+            "outboundTag": "proxy",
+            "network": "tcp,udp"
+          }
+        ];
       }
 
-      final v2rayURL = FlutterV2ray.parseFromURL(configToUse);
-      _currentServerName = v2rayURL.remark.isNotEmpty 
-          ? v2rayURL.remark 
-          : (_antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Reality');
-
+      // CRITICAL: bypassSubnets MUST BE null!
+      // In flutter_v2ray Android VpnService:
+      // When bypassSubnets is null, it executes: builder.addRoute("0.0.0.0", 0);
+      // which properly routes all system traffic into the VPN tunnel.
       await _v2ray.startV2Ray(
         remark: _currentServerName,
         config: v2rayURL.getFullConfiguration(),
-        bypassSubnets: bypassRules,
+        bypassSubnets: null,
         proxyOnly: false,
       );
 
       _measurePing();
     } catch (e) {
       debugPrint('Connection error: $e');
+      _lastError = e.toString();
       _status = ConnectionStatus.disconnected;
       notifyListeners();
     }
@@ -154,7 +175,11 @@ class MonteVpnService extends ChangeNotifier {
   Future<void> disconnect() async {
     _status = ConnectionStatus.connecting;
     notifyListeners();
-    await _v2ray.stopV2Ray();
+    try {
+      await _v2ray.stopV2Ray();
+    } catch (e) {
+      debugPrint('Disconnect error: $e');
+    }
     _status = ConnectionStatus.disconnected;
     _pingDelay = -1;
     notifyListeners();
@@ -178,3 +203,4 @@ class MonteVpnService extends ChangeNotifier {
     }
   }
 }
+
