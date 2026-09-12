@@ -273,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     widget.vpnService.lastError!,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: AppTheme.dangerRed,
+                      color: AppTheme.errorRed,
                       fontSize: 12,
                     ),
                   ),
