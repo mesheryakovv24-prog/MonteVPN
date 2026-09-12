@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class AppTheme {
   static const Color background = Color(0xFF0B0E14);
@@ -26,7 +26,7 @@ class AppTheme {
       secondary: accentPurple,
       error: errorRed,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
@@ -117,7 +117,7 @@ class MonteVpnService extends ChangeNotifier {
         bypassRules = AppConfig.defaultDirectDomains;
       }
 
-      final v2rayURL = _v2ray.parseV2rayURL(configToUse);
+      final v2rayURL = FlutterV2ray.parseFromURL(configToUse);
       _currentServerName = v2rayURL.remark.isNotEmpty ? v2rayURL.remark : 'MonteVPN Reality';
 
       await _v2ray.startV2Ray(
