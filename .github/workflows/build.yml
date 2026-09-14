@@ -32,10 +32,11 @@ jobs:
         run: |
           set -e
 
-          # 1. Backup custom Android manifest & kotlin files
+          # 1. Backup custom Android manifest, kotlin & res files
           mkdir -p /tmp/backup
           cp android/app/src/main/AndroidManifest.xml /tmp/backup/AndroidManifest.xml
           cp -r android/app/src/main/kotlin /tmp/backup/kotlin
+          if [ -d "android/app/src/main/res" ]; then cp -r android/app/src/main/res /tmp/backup/res; fi
 
           # 2. Generate a pristine official Flutter Android scaffold
           flutter create /tmp/fresh_app --org com.montevpn --project-name monte_vpn
@@ -44,9 +45,10 @@ jobs:
           rm -rf android
           cp -r /tmp/fresh_app/android .
 
-          # 4. Inject our custom AndroidManifest and Kotlin files
+          # 4. Inject our custom AndroidManifest, Kotlin and res files
           cp /tmp/backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           cp -r /tmp/backup/kotlin android/app/src/main/
+          if [ -d "/tmp/backup/res" ]; then cp -r /tmp/backup/res android/app/src/main/; fi
 
           # 5. Set minSdk 24, targetSdk 33, compileSdk 36 for V2Ray VPNService
           find android -name "build.gradle*" -exec sed -i 's/minSdkVersion .*/minSdkVersion 24/' {} + || true

@@ -1,7 +1,7 @@
 class AppConfig {
   static const String appName = 'MonteVPN';
   static const String appTagline = 'Fast • Secure • Unrestricted';
-  static const String appVersion = '1.0.9';
+  static const String appVersion = '1.1.0';
 
   // Ссылка на автоматическую подписку с сервера MonteVPN
   static const String defaultSubscriptionUrl = 'http://87.199.196.244:2096/sub/3bd9599f16b1222c';
