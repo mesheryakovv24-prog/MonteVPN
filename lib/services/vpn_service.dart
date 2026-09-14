@@ -195,7 +195,11 @@ class MonteVpnService extends ChangeNotifier {
       }
 
       final v2rayURL = FlutterV2ray.parseFromURL(configToUse);
-      _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+      if (_serverConfig.isNotEmpty) {
+        _currentServerName = (v2rayURL.remark.isNotEmpty) ? v2rayURL.remark : 'Пользовательский VLESS';
+      } else {
+        _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+      }
 
       // Configure clean DNS servers
       v2rayURL.dns = {
