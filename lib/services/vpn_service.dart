@@ -12,14 +12,18 @@ class MonteVpnService extends ChangeNotifier {
   factory MonteVpnService() => _instance;
   MonteVpnService._internal();
 
+  Timer? _connectionTimeoutTimer;
+
   late final FlutterV2ray _v2ray = FlutterV2ray(
     onStatusChanged: (status) {
       _v2rayStatus = status;
       if (status.state == 'CONNECTED') {
+        _connectionTimeoutTimer?.cancel();
         _status = ConnectionStatus.connected;
       } else if (status.state == 'CONNECTING') {
         _status = ConnectionStatus.connecting;
       } else {
+        _connectionTimeoutTimer?.cancel();
         _status = ConnectionStatus.disconnected;
       }
       notifyListeners();
@@ -65,7 +69,7 @@ class MonteVpnService extends ChangeNotifier {
     _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
     notifyListeners();
 
-    if (_status == ConnectionStatus.connected) {
+    if (_status == ConnectionStatus.connected || _status == ConnectionStatus.connecting) {
       await disconnect();
       await connect();
     }
@@ -77,7 +81,7 @@ class MonteVpnService extends ChangeNotifier {
     await prefs.setBool('bypass_ru', value);
     notifyListeners();
 
-    if (_status == ConnectionStatus.connected) {
+    if (_status == ConnectionStatus.connected || _status == ConnectionStatus.connecting) {
       await disconnect();
       await connect();
     }
@@ -99,9 +103,21 @@ class MonteVpnService extends ChangeNotifier {
     _lastError = null;
     notifyListeners();
 
+    // 15-second watchdog timer: prevents UI getting stuck in connecting state
+    _connectionTimeoutTimer?.cancel();
+    _connectionTimeoutTimer = Timer(const Duration(seconds: 15), () async {
+      if (_status == ConnectionStatus.connecting) {
+        debugPrint('Connection watchdog timed out');
+        await disconnect();
+        _lastError = 'Превышено время ожидания. Проверьте интернет.';
+        notifyListeners();
+      }
+    });
+
     try {
       final hasPermission = await _v2ray.requestPermission();
       if (!hasPermission) {
+        _connectionTimeoutTimer?.cancel();
         _status = ConnectionStatus.disconnected;
         _lastError = 'Разрешение на VPN не получено';
         notifyListeners();
@@ -165,6 +181,7 @@ class MonteVpnService extends ChangeNotifier {
 
       _measurePing();
     } catch (e) {
+      _connectionTimeoutTimer?.cancel();
       debugPrint('Connection error: $e');
       _lastError = e.toString();
       _status = ConnectionStatus.disconnected;
@@ -173,6 +190,7 @@ class MonteVpnService extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _connectionTimeoutTimer?.cancel();
     _status = ConnectionStatus.connecting;
     notifyListeners();
     try {
@@ -186,7 +204,7 @@ class MonteVpnService extends ChangeNotifier {
   }
 
   Future<void> toggleConnection() async {
-    if (_status == ConnectionStatus.connected) {
+    if (_status == ConnectionStatus.connected || _status == ConnectionStatus.connecting) {
       await disconnect();
     } else {
       await connect();
