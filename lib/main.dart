@@ -64,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showConfigDialog() {
-    final textController = TextEditingController();
+    final textController = TextEditingController(text: widget.vpnService.serverConfig);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -73,9 +73,15 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: AppTheme.cardBorder),
         ),
-        title: const Text(
-          'Настройки подключения',
-          style: TextStyle(color: AppTheme.textWhite, fontSize: 18),
+        title: Row(
+          children: const [
+            Icon(Icons.vpn_key_rounded, color: AppTheme.primaryNeon, size: 22),
+            SizedBox(width: 10),
+            Text(
+              'Настройки VLESS ключа',
+              style: TextStyle(color: AppTheme.textWhite, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -88,10 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: textController,
-              maxLines: 3,
-              style: const TextStyle(color: AppTheme.textWhite, fontSize: 13),
+              maxLines: 4,
+              style: const TextStyle(color: AppTheme.textWhite, fontSize: 12, fontFamily: 'monospace'),
               decoration: InputDecoration(
-                hintText: 'vless://... или https://.../sub/...',
+                hintText: 'vless://... или http://.../sub/...',
                 hintStyle: const TextStyle(color: AppTheme.textMuted),
                 filled: true,
                 fillColor: AppTheme.background,
@@ -105,9 +111,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 10),
+            if (widget.vpnService.serverConfig.isNotEmpty)
+              const Text(
+                '✓ Пользовательский VLESS ключ сохранен',
+                style: TextStyle(color: AppTheme.successGreen, fontSize: 12, fontWeight: FontWeight.w600),
+              )
+            else
+              const Text(
+                'ℹ Сейчас активен встроенный ключ (Анти-БПЛА ya.ru)',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              ),
           ],
         ),
         actions: [
+          if (widget.vpnService.serverConfig.isNotEmpty)
+            TextButton(
+              onPressed: () async {
+                await widget.vpnService.setCustomConfig('');
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Сброшено на встроенный ключ сервера!')),
+                  );
+                }
+              },
+              child: const Text('Сбросить ключ', style: TextStyle(color: AppTheme.errorRed)),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Отмена', style: TextStyle(color: AppTheme.textMuted)),
@@ -118,15 +148,15 @@ class _HomeScreenState extends State<HomeScreen> {
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            onPressed: () {
+            onPressed: () async {
               final val = textController.text.trim();
-              if (val.isNotEmpty) {
-                widget.vpnService.setCustomConfig(val);
+              await widget.vpnService.setCustomConfig(val);
+              if (mounted) {
+                Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Конфигурация успешно сохранена!')),
+                  SnackBar(content: Text(val.isEmpty ? 'Используется встроенный ключ' : 'Ключ успешно сохранен!')),
                 );
               }
-              Navigator.pop(context);
             },
             child: const Text('Сохранить', style: TextStyle(fontWeight: FontWeight.bold)),
           ),

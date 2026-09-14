@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 
@@ -44,6 +45,7 @@ class MonteVpnService extends ChangeNotifier {
   bool get antiBpla => _antiBpla;
   bool get bypassRu => _bypassRu;
   String get currentServerName => _currentServerName;
+  String get serverConfig => _serverConfig;
   int get pingDelay => _pingDelay;
   String? get lastError => _lastError;
 
@@ -53,7 +55,12 @@ class MonteVpnService extends ChangeNotifier {
       _antiBpla = prefs.getBool('anti_bpla') ?? AppConfig.defaultAntiBpla;
       _bypassRu = prefs.getBool('bypass_ru') ?? AppConfig.defaultBypassRu;
       _serverConfig = prefs.getString('server_config') ?? '';
-      _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+      
+      if (_serverConfig.isNotEmpty) {
+        _currentServerName = 'Пользовательский VLESS';
+      } else {
+        _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+      }
 
       await _v2ray.initializeV2Ray();
     } catch (e) {
@@ -66,7 +73,9 @@ class MonteVpnService extends ChangeNotifier {
     _antiBpla = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('anti_bpla', value);
-    _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+    if (_serverConfig.isEmpty) {
+      _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+    }
     notifyListeners();
 
     if (_status == ConnectionStatus.connected || _status == ConnectionStatus.connecting) {
@@ -88,10 +97,42 @@ class MonteVpnService extends ChangeNotifier {
   }
 
   Future<void> setCustomConfig(String config) async {
-    _serverConfig = config;
+    _serverConfig = config.trim();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('server_config', config);
+    if (_serverConfig.isEmpty) {
+      await prefs.remove('server_config');
+      _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+    } else {
+      await prefs.setString('server_config', _serverConfig);
+      _currentServerName = 'Пользовательский VLESS';
+    }
     notifyListeners();
+
+    if (_status == ConnectionStatus.connected || _status == ConnectionStatus.connecting) {
+      await disconnect();
+      await connect();
+    }
+  }
+
+  Future<String> _resolveSubscriptionUrl(String subUrl) async {
+    try {
+      final res = await http.get(Uri.parse(subUrl)).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        String body = res.body.trim();
+        try {
+          body = utf8.decode(base64Decode(body));
+        } catch (_) {}
+        for (var line in body.split('\n')) {
+          line = line.trim();
+          if (line.startsWith('vless://') || line.startsWith('vmess://') || line.startsWith('trojan://')) {
+            return line;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Subscription resolution error: $e');
+    }
+    return subUrl;
   }
 
   Future<void> connect() async {
@@ -127,6 +168,30 @@ class MonteVpnService extends ChangeNotifier {
       String configToUse = _serverConfig.trim();
       if (configToUse.isEmpty) {
         configToUse = _antiBpla ? AppConfig.antiBplaVlessKey : AppConfig.defaultVlessKey;
+        _currentServerName = _antiBpla ? 'MonteVPN Анти-БПЛА (ya.ru)' : 'MonteVPN Cloud (443)';
+      } else {
+        _currentServerName = 'Пользовательский VLESS';
+      }
+
+      // If user provided a subscription URL, fetch and extract VLESS key
+      if (configToUse.startsWith('http://') || configToUse.startsWith('https://')) {
+        configToUse = await _resolveSubscriptionUrl(configToUse);
+      }
+
+      // If key contains old spx parameter with %2F, clean it to avoid reality mismatch
+      if (configToUse.contains('spx=%2F')) {
+        configToUse = configToUse.replaceAll(RegExp(r'spx=%2F[^&]*'), 'spx=');
+      }
+
+      if (!configToUse.startsWith('vless://') &&
+          !configToUse.startsWith('vmess://') &&
+          !configToUse.startsWith('trojan://') &&
+          !configToUse.startsWith('ss://')) {
+        _connectionTimeoutTimer?.cancel();
+        _status = ConnectionStatus.disconnected;
+        _lastError = 'Неверный формат ключа (нужна ссылка vless://)';
+        notifyListeners();
+        return;
       }
 
       final v2rayURL = FlutterV2ray.parseFromURL(configToUse);
